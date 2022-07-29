@@ -1,6 +1,8 @@
 1. Define the problem
     -writing an algorithm to de-multiplex files and report index-hopping
     -demultiplex reads by index-pair
+    -Need to compare index 1 and index 2 for each read to see if they match or don't match
+    -Separately the 4 reads into categorized files based on certain filtering conditions
 2. Describe output
     outputting 52 total files:
     -one R1 FASTQ file per matching index-pair

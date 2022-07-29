@@ -17,7 +17,7 @@
         ![index2](Index2.png)
         ![read2](Read2.png)
     2. For the indexes, I chose to have a quality cutoff of Q30 for both index reads and biological read pairs. I chose Q30 because in the histograms from part 1, the mean Qscores tended to be around Q30 or above. Also, when I was reading about Illumina it says that they use a Q30 cutoff, so that validated that Q30 could potentially be a good cutoff value. For the index reads, I set the requirement that each base position needed to have a quality score >= Q30 because I wanted to make sure that I had good quality indexes. However, for the biological read pairs, I set the requirement so that the mean Qscore of the sequence >= Q30 because it is okay if there are N's located in the biological read.
-    3. In Index 1 file, 3976613 indexes contain an N. In Index 2 file, 3328051 indexes contain an N.
+    3. In Index 1 file, 3976613 indexes contain an N. In Index 2 file, 3328051 indexes contain an N. There is a total of 7304664 indexes with an N.
 ```
     zcat 1294_S1_L008_R2_001.fastq.gz | sed -n "2~4p" | grep -c "N" --> 3976613
     zcat 1294_S1_L008_R3_001.fastq.gz | sed -n "2~4p" | grep -c "N" --> 3328051 
@@ -27,6 +27,8 @@
 1. Define the problem
     -writing an algorithm to de-multiplex files and report index-hopping
     -demultiplex reads by index-pair
+    -Need to compare index 1 and index 2 for each read to see if they match or don't match
+    -Separately the 4 reads into categorized files based on certain filtering conditions
 2. Describe output
     outputting 52 total files:
     -one R1 FASTQ file per matching index-pair
