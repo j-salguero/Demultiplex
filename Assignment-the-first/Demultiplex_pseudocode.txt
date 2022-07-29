@@ -36,11 +36,11 @@
     2. Function headers (name and parameters)
         def rev_comp(str: sequence) -> str
     3. Test examples for individual functions
-            -Reverse complement function:
-                rev_comp(AAGGTCTGA)
-                    * input: AAGGTCTGA --> return: TCAGACCTT
-                rev_comp(TGATTTTGCAGGA)
-                    * input: TGATTTTGCAGGA --> return: TCCTGCAAAATCA
+        -Reverse complement function:
+            rev_comp(AAGGTCTGA)
+                * input: AAGGTCTGA --> return: TCAGACCTT
+            rev_comp(TGATTTTGCAGGA)
+                * input: TGATTTTGCAGGA --> return: TCCTGCAAAATCA
     4. Return statement
-        -Reverse complement function: (rev_comp is a variable that I will be using in the function)
-            return rev_comp
+        -Reverse complement function: (revs_comp is a variable that I will be using in the function)
+            return revs_comp
