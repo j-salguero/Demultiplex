@@ -43,10 +43,11 @@
     -Read the sequence line of the nth record for all 4 files
     -Create set of 24 known indexes (forward/given)
     -Create 3 counters to keep track of number of reads going into each file: matched, unmatched, unknown
-    -Collect all 4 lines of the record into 4 temporary arrays of size 4 (will save each line as a position in the array)
-    -For each record:
+    -Create empty dictionary to keep track of the amount of times each barcode had went to the matched file: barcodes_matched
+    -Collect all 4 lines of the record for each file and place into 4 temporary arrays of size 4 (will save each line as a position in the array)
+    -For each record in the arrays:
+        -Check if any N's in the index 1 or index 2 sequences. If either containts an N --> unknown file, increment unknown counter
         -if any base pair position has Qscore < 30 for either index --> unknown file, increment unknown counter
-        -Check if any N's in the index 1 or index 2. If either containts an N --> unknown file, increment unknown counter
         -Check if index 1 in set:
             -if index 1 is not in the set --> unknown file, increment unknown counter
             -if index 1 in set --> continue filtering
@@ -55,8 +56,12 @@
                     -If rev comp Index 2 is in set --> check if matching
                         -Check if matching: does index 1 == rev comp index 2
                             -Yes --> index1_rcindex2_Read#.fq (matched files) (rcindex2 = reverse complement of Act2), , increment matched counter
-                            -No --> unmatched file, increment unmatched counter  
+                                also will have barcodes_matched[key] = value, 
+                                    if key is in the dictionary, increment the value
+                                    if key is not in the dictionary, add it and set equal to 1
+                            -No --> unmatched file, increment unmatched counter 
 ```
+
 5. High level functions. For each function, be sure to include:
     1. Description/doc string
         -Reverse complement function:
