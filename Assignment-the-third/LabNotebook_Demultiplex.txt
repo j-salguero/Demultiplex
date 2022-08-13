@@ -1,0 +1,282 @@
+*********************************
+Demultiplex: Assignment the First
+*********************************
+
+-------------------------------------------------
+Part 1: Quality Score Distribution per-nucleotide
+-------------------------------------------------
+
+Data exploration:
+/projects/bgmp/shared/2017_sequencing/1294_S1_L008_R1_001.fastq.gz 
+zcat 1294_S1_L008_R4_001.fastq.gz | head
+
+Number of reads in each file
+    zcat 1294_S1_L008_R1_001.fastq.gz | wc -l (will take a longggg time to run)
+Determine the length of the reads in each file
+    zcat 1294_S1_L008_R1_001.fastq.gz | head -2 | tail -1 | wc (then subtract 1 because '/n' at end of the line)
+    zcat 1294_S1_L008_R2_001.fastq.gz | head -2 | tail -1 | wc
+    zcat 1294_S1_L008_R3_001.fastq.gz | head -2 | tail -1 | wc
+    zcat 1294_S1_L008_R4_001.fastq.gz | head -2 | tail -1 | wc
+
+Determine the phred encoding for these data
+    if it is phred 64, there will be lowercase letters in the quality score lines
+    also no hashtags in phred64
+    to search for these lowercase letters in only the quality score lines:
+        zcat 1294_S1_L008_R1_001.fastq.gz | sed -n '4~4p' | grep -E "[a-z]+" --> if it finds nothing, then it is phred 33
+        zcat 1294_S1_L008_R2_001.fastq.gz | sed -n '4~4p' | grep -E "[a-z]+"
+        zcat 1294_S1_L008_R3_001.fastq.gz | sed -n '4~4p' | grep -E "[a-z]+"
+        zcat 1294_S1_L008_R4_001.fastq.gz | sed -n '4~4p' | grep -E "[a-z]+"
+
+Generate a per base distribution of quality scores for read1, read2, index1, and index2. 
+Average the quality scores at each position for all reads and generate a per nucleotide mean distribution as you did in part 1 of PS4 (in Bi621)
+    -will need bioinfo.py --> copy it into this repository
+    -add the populate_list function into this module
+    #indexes may be reverse compliments of each other??
+
+Note: Since reading through zipped files, will need to use gzip module
+    -When reading each line, turn the zipped bits into the ascii characters
+        line = line.decode("ascii")
+        OR 
+        with gzip.open(args.file, "rt") as opened: --> I used this form for my code (rt = read text mode)
+
+zcat 1294_S1_L008_R1_001.fastq.gz | head -2 | tail -1 | wc --> gives 102, but minus 1 bc '/n' character at end
+
+I ran into a couple of issues with running out of memory, so I had to rewrite portions of my code
+    -get rid of 2D list (don't want to keepindividual qscores, instead just have a running sum in a 1D list)
+
+creating the histograms: *Job number, command --> command in the bash script*
+21756419, sbatch read1.sh --> ./Demultiplex_pt1.py -f '/projects/bgmp/shared/2017_sequencing/1294_S1_L008_R1_001.fastq.gz' -l 101 -g 'Read1'
+    -took about 2 hours to run
+21756421, sbatch index1.sh --> ./Demultiplex_pt1.py -f '/projects/bgmp/shared/2017_sequencing/1294_S1_L008_R2_001.fastq.gz' -l 8 -g 'Index1'
+    -took about 20 minutes to run
+21756422, sbatch index2.sh --> ./Demultiplex_pt1.py -f '/projects/bgmp/shared/2017_sequencing/1294_S1_L008_R3_001.fastq.gz' -l 8 -g 'Index2'
+    -took about 20 minutes to run
+21756420, sbatch read2.sh --> ./Demultiplex_pt1.py -f '/projects/bgmp/shared/2017_sequencing/1294_S1_L008_R4_001.fastq.gz' -l 101 -g 'Read2'
+    -took about 2 hours to run
+
+How many indexes have undetermined (N) base calls? (only on Index1, Index2)
+    zcat 1294_S1_L008_R2_001.fastq.gz | sed -n "2~4p" | grep -c "N" --> 3976613
+    zcat 1294_S1_L008_R3_001.fastq.gz | sed -n "2~4p" | grep -c "N" --> 3328051
+
+--------------------------------------------------------
+Part 2: Develop an algorithm to de-multiplex the samples
+--------------------------------------------------------
+
+- Define the problem
+    * writing an algorithm to de-multiplex files and report index-hopping
+    * demultiplex reads by index-pair
+    * Need to compare index 1 and index 2 for each read to see if they match or don't match
+    * Separately the 4 reads into categorized files based on certain filtering conditions
+
+- Determine/describe what output would be informative
+    * outputting 52 total files:
+        -one R1 FASTQ file per matching index-pair
+        -one R2 FASTQ file per matching index-pair
+        -two additional FASTQ files for non-matching index-pairs (index-hopping), 
+        -two additional FASTQ files when one or both index reads are unknown or low quality 
+            *do not match the 24 known indexes [this includes indexes with 'N's in them] or do not meet a quality score cutoff.
+
+- Write examples (unit tests!):
+    - Include four properly formatted input FASTQ files with read pairs that cover all three categories (dual matched, index-hopped, unknown index)
+    - Include the appropriate number of properly formatted output FASTQ files given your input files
+
+- Develop your algorithm using pseudocode
+    * R1, R2, I1, I2
+        -index contains N? --> unknown 
+            should we use validated base seq function?
+        -Qscores < 30 --> unknown (low quality)
+            is it Qscore per base position or the average Qscore of the entire line? --> 
+            is it just for the Index files? or all files?
+        -does index 1 match reverse comp of index 2? --> if not matched, index hopping
+        -does reverse comp of index 2 match the 24 known? --> if not in the known 24, send to unknown file
+            make list of 24 known & check if indexes are contained in that list
+    * Add headers (to all files) and send to corresponding files
+
+    -Open all 4 files and will be looping through the records
+    -Read the sequence line of the nth record for all 4 files
+    -Records with at least one Index with N in sequence --> into the unknown file
+        -if indexes dont match --> hopping file
+        -if indexes match, but not in known 24 --> unknown file
+        -if indexes match and in known 24 --> send it index_index_R#.fq
+
+    -Compare both indexes (index 1, index 2) to the known 24 index dictionary
+        -if index 1 in keys, 
+            if index 2 in value --> check next condition
+        -if either is not in corresponding list --> unknown file
+    -Records with at least one Index with N in sequence --> into the unknown file
+    
+    -Check if indexes match:
+        -if indexes dont match --> hopping file
+        -if indexes match (already know they're in the original 24 indexes) --> send to index_index_Read#.fq
+            *for adding to the header lines: @header_index1_index2(revcomp)
+
+*Final version of pseudocode (as of 7/29/22)*
+    -Open all 4 files and read in parallel (will be looping through the records)
+    -Read the sequence line of the nth record for all 4 files
+    -Create set of 24 known indexes (forward/given)
+    -Create 3 counters to keep track of number of reads going into each file: matched, unmatched, unknown
+    -Create empty dictionary to keep track of the amount of times each barcode had went to the matched file: barcodes_matched
+    -Collect all 4 lines of the record for each file and place into 4 temporary arrays of size 4 (will save each line as a position in the array)
+    -For each record in the arrays:
+        -Check if any N's in the index 1 or index 2 sequences. If either containts an N --> unknown file, increment unknown counter
+        -if any base pair position has Qscore < 30 for either index --> unknown file, increment unknown counter
+        -Check if index 1 in set:
+            -if index 1 is not in the set --> unknown file, increment unknown counter
+            -if index 1 in set --> continue filtering
+                -Check if rev comp Index 2 is in set:
+                    -If rec comp Index 2 not in set --> unknown file, increment unknown counter
+                    -If rev comp Index 2 is in set --> check if matching
+                        -Check if matching: does index 1 == rev comp index 2
+                            -Yes --> index1_rcindex2_Read#.fq (matched files) (rcindex2 = reverse complement of Act2), , increment matched counter
+                                also will have barcodes_matched[key] = value, 
+                                    if key is in the dictionary, increment the value
+                                    if key is not in the dictionary, add it and set equal to 1
+                            -No --> unmatched file, increment unmatched counter 
+
+- Determine high level functions
+    - Description/doc string – What does this function do?
+    - Function headers (name and parameters)
+    - Test examples for individual functions
+* Reverse complement function:
+     ```Take in DNA sequence as input (5' - 3'). Return reverse complement of input sequence (5' - 3').```
+     def rev_comp(str: sequence) -> str
+     rev_comp(AAGGTCTGA)
+        * input: AAGGTCTGA --> return: TCAGACCTT
+     rev_comp(TGATTTTGCAGGA)
+        * input: TGATTTTGCAGGA --> return: TCCTGCAAAATCA
+     return revs_comp
+
+Conditions to check in the unit test:
+    -unknown = seq1
+    -matched = seq2
+    -unmatched (index hopping) = seq3
+
+
+*********************************
+Demultiplex: Assignment the Third
+*********************************
+
+THINGS TO THINK ABOUT:
+open files as variables and then close at the end, rather than doing with open(file)
+-don't open files in loops, will take FOREVER
+-open the output files are variables at the top of your code
+-how would we determine all of the output files that will need to be opened?
+    *don't open it in the loop, open it once
+-bin them separately, for when index 1 = index 2, index 2 = index 1
+
+Incorporate feedback from peer code reviews
+-
+
+Utilize appropriate functions (perhaps you want to import bioinfo???)
+-rev_comp
+-covert_phred
+
+Sufficiently comment your code/use docstrings/use type annotations on functions
+
+Use unit tests on functions/entire algorithm to ensure it works properly
+
+Create a useful report for the end user of your code
+
+Use argparse to "generalize" your code
+
+Be mindful of "simple" things you can do to optimize your code
+
+******Make a markdown file to summarize the results of your code******
+        -Percentage of reads from each sample
+        -Overall amount of index swapping
+        -Any figures/any other relevant data your code output
+
+Will use a lot of memory to save each line as a variable:
+        # r1_line2 = read1.readline()
+        # r1_line3 = read1.readline()
+        # r1_line4 = read1.readline()
+        #read1_rec = np.array([r1_line1.strip(), r1_line2.strip(), r1_line3.strip(), r1_line4.strip()])
+Instead, did it all on one line:
+    read1_rec = np.array([r1_line1.strip(), read1.readline().strip(), read1.readline().strip(), read1.readline().strip()])
+
+When calling the test files, this is the line of code I'm using:
+    ./Demulti_3rd.py -r1 ../TEST-input_FASTQ/test_R1.fq.gz -r2 ../TEST-input_FASTQ/test_R2.fq.gz -r3 ../TEST-input_FASTQ/test_R3.fq.gz -r4 ../TEST-input_FASTQ/test_R4.fq.gz
+    ./Demulti_3rd.py -r1 ../TEST-input_FASTQ/test_R1.fastq.gz -r2 ../TEST-input_FASTQ/test_R2.fastq.gz -r3 ../TEST-input_FASTQ/test_R3.fastq.gz -r4 ../TEST-input_FASTQ/test_R4.fastq.gz -i ../TEST-input_FASTQ/given_indexes.txt
+Reverse complement function:
+    def rev_comp(seq: str) -> str: 
+    #the complements for each DNA pair, N has no complement so it stays as N
+    complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 'N': 'N'} 
+    forward = list(seq)
+    reverse = ""
+    #getting the reverse complement and saving it to a new string
+    for i in reversed(forward):
+        reverse += complement[i]
+    return reverse  
+
+#will be opening the output files at the BEGINNING of the code, prior to while loop
+Writing to output files:
+    def write_output(file: str, array: arr, ind1: str, ind2: str) --> str:
+    #add the indexes to the end of the header line
+    new_header = array[0] + ind1 + '_' + ind2
+    #write the entire record (updated header) to desired output file
+    file.write(array[0]+ '\n' + array[1]+ '\n' + array[2]+ '\n' + array[3]+ '\n')
+    return("Success")
+
+For the known indexes, need to create the set from a file
+-DO NOT HARD CODE THIS (so you can reuse this code later)
+-also remember to add docustrings to all new functions
+
+I think the test files that I created for Assignment the first, are actually incorrect haha 
+-need to make sure that the matched tests are also using indexes that are included in the 24 known indexes
+-conditions to test:
+    *at least one index contains N (N, unknown)
+    *at least one phred score < 30  (low quality, unknown)
+    *at least one index not in known indexes (unknown)
+    *both indexes in known, but don't match (unmatched)
+    *both indexes in known and do match (multiple matched files)
+    #use diff function to compare test input vs test output
+        -y = will show all lines and have a symbol where there is a difference
+        -y --suppress_lines = will only show you lines that have differences
+
+Redoing test files:
+-seq1 = unknown (N)
+-seq2 = matched and known
+-seq3 = unmatched but both known
+-seq4 = unknown (low quality) --> have one Qscore < 30 in index files
+-seq5 = unknown (not in known indexes)
+
+Sbatch:
+Submitted batch job 21828019: sbatch Demultiplex.sh
+-took 15 hours and 55 minutes to complete 
+-Results: 
+
+**********
+QAA
+**********
+-------
+Part 1:
+-------
+fastqc [-o output dir] [--(no)extract] [-f fastq|bam|sam]
+           [-c contaminant file] seqfile1 .. seqfileN
+conda install fastqc
+fastqc -o fastqc_output --noextract /projects/bgmp/shared/2017_sequencing/demultiplexed/15_3C_mbnl_S11_L008_R1_001.fastq.gz \
+/projects/bgmp/shared/2017_sequencing/demultiplexed/15_3C_mbnl_S11_L008_R2_001.fastq.gz
+
+fastqc -o fastqc_output --noextract /projects/bgmp/shared/2017_sequencing/demultiplexed/6_2D_mbnl_S5_L008_R1_001.fastq.gz \
+/projects/bgmp/shared/2017_sequencing/demultiplexed/6_2D_mbnl_S5_L008_R2_001.fastq.gz
+
+-------
+Part 2:
+-------
+
+conda create --name QAA
+conda activate QAA
+conda install cutadapt
+conda install trimmomatic
+cutadapt -h --> use cutadapt -a for paired-end reads
+Submitted batch job 21831364
+
+cat outputR1_15_3C_mbnl_S11_L008.fastq | grep "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+cat outputR2_15_3C_mbnl_S11_L008.fastq | grep "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+cat outputR1_15_3C_mbnl_S11_L008.fastq | grep "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT"
+cat outputR2_15_3C_mbnl_S11_L008.fastq | grep "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT"
+
+cat outputR1_6_2D_mbnl_S5_L008.fastq | grep "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+cat outputR2_6_2D_mbnl_S5_L008.fastq | grep "AGATCGGAAGAGCACACGTCTGAACTCCAGTCA"
+cat outputR1_6_2D_mbnl_S5_L008.fastq | grep "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT"
+cat outputR2_6_2D_mbnl_S5_L008.fastq | grep "AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT"
